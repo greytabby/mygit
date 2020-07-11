@@ -1,0 +1,8 @@
+- ~~git init~~
+- **git add**
+    - file
+        - calc file hash
+        - create dir file hash 2char dir
+        - create file file hash rest char
+    - directory
+    - index file

@@ -1,0 +1,122 @@
+package cmd
+
+import (
+	"bytes"
+	"crypto/sha1"
+	"encoding/hex"
+	"fmt"
+	"io/ioutil"
+	"os"
+	"path/filepath"
+
+	"github.com/labstack/gommon/log"
+	"github.com/pkg/errors"
+)
+
+type GitRepository struct {
+	worktree string
+	gitdir   string
+	conf     string
+}
+
+var (
+	ErrGitDirAlreadyExists = errors.New(".git is already exists.")
+)
+
+func (gr *GitRepository) cmdInit() error {
+	gitDir := filepath.Join(gr.worktree, gr.gitdir)
+	err := gr.createGitDir(gitDir)
+	if err != nil {
+		return err
+	}
+	// log.Infof("Initialized empty git directory in %v", gitDir)
+	return nil
+}
+
+func (gr *GitRepository) cmdAdd(target string) error {
+	content, err := ioutil.ReadFile(target)
+	if err != nil {
+		return err
+	}
+	hash := calcBlobSha1Hex(content)
+	dir := filepath.Join(gr.worktree, gr.gitdir, "objects", hash[:2])
+	file := filepath.Join(dir, hash[2:])
+
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		if err = os.Mkdir(dir, 0755); err != nil {
+			return err
+		}
+	}
+
+	if err = ioutil.WriteFile(file, content, 0444); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (gr *GitRepository) createGitDir(gitDir string) error {
+	if _, err := os.Stat(gitDir); !os.IsNotExist(err) {
+		return ErrGitDirAlreadyExists
+	}
+	if err := os.Mkdir(gitDir, 0755); err != nil {
+		return err
+	}
+	if err := gr.createObjectsDir(gitDir); err != nil {
+		return err
+	}
+	if err := gr.createRefsDir(gitDir); err != nil {
+		return err
+	}
+	if err := gr.CreateHEADFile(gitDir); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (gr *GitRepository) createObjectsDir(gitDir string) error {
+	path := filepath.Join(gitDir, "objects")
+	return os.Mkdir(path, 0755)
+}
+
+func (gr *GitRepository) createRefsDir(gitDir string) error {
+	path := filepath.Join(gitDir, "refs")
+	if err := os.Mkdir(path, 0755); err != nil {
+		return err
+	}
+	heads := filepath.Join(path, "heads")
+	return os.Mkdir(heads, 0755)
+}
+
+func (gr *GitRepository) CreateHEADFile(gitDir string) error {
+	headFile := filepath.Join(gitDir, "HEAD")
+	content := []byte("ref: refs/heads/master")
+	return ioutil.WriteFile(headFile, content, 0644)
+}
+
+func main() {
+	cwd, err := os.Getwd()
+	if err != nil {
+		log.Fatal("Cannot get current directory name")
+	}
+	gr := &GitRepository{worktree: cwd, gitdir: ".git", conf: ""}
+	err = gr.cmdInit()
+	if err != nil {
+		log.Fatal(err)
+	}
+	gr.cmdAdd("aaa")
+	gr.cmdAdd("mygit.go")
+}
+
+func calcBlobSha1Hex(content []byte) string {
+	hash := sha1.Sum(toHashTarget("blob", content))
+	return hex.EncodeToString(hash[:])
+}
+
+func toHashTarget(objType string, content []byte) []byte {
+	buf := new(bytes.Buffer)
+	contentLen := len(content)
+	fmt.Fprintf(buf, "%s %d%s%s", objType, contentLen, []byte{0}, content)
+	return buf.Bytes()
+}

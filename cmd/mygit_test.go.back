@@ -1,0 +1,69 @@
+package cmd
+
+import (
+	"io/ioutil"
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+)
+
+func TestCmdInit(t *testing.T) {
+	t.Run("git init success", func(t *testing.T) {
+		tempDir, err := ioutil.TempDir("", "worktree")
+		assert.NoError(t, err)
+		assert.DirExists(t, tempDir)
+		defer os.RemoveAll(tempDir)
+
+		gr := GitRepository{worktree: tempDir, gitdir: ".git", conf: ""}
+		err = gr.cmdInit()
+		assert.NoError(t, err)
+
+		objects := filepath.Join(gr.worktree, gr.gitdir, "objects")
+		refs := filepath.Join(gr.worktree, gr.gitdir, "refs")
+		refsHeads := filepath.Join(refs, "heads")
+		HEADFile := filepath.Join(gr.worktree, gr.gitdir, "HEAD")
+		assert.DirExists(t, objects)
+		assert.DirExists(t, refs)
+		assert.DirExists(t, refsHeads)
+		assert.FileExists(t, HEADFile)
+	})
+
+	t.Run("git directory already exist", func(t *testing.T) {
+		tempDir, err := ioutil.TempDir("", "worktree")
+		assert.NoError(t, err)
+		gitDir := filepath.Join(tempDir, ".git")
+		err = os.Mkdir(gitDir, 0755)
+		assert.NoError(t, err)
+		assert.DirExists(t, gitDir)
+		defer os.RemoveAll(tempDir)
+
+		gr := GitRepository{worktree: tempDir, gitdir: ".git", conf: ""}
+		err = gr.cmdInit()
+		assert.Error(t, err)
+	})
+}
+
+func TestCmdAdd(t *testing.T) {
+	tempDir, err := ioutil.TempDir("", "worktree")
+	assert.NoError(t, err)
+	assert.DirExists(t, tempDir)
+	defer os.RemoveAll(tempDir)
+
+	gr := GitRepository{worktree: tempDir, gitdir: ".git", conf: ""}
+	err = gr.cmdInit()
+	assert.NoError(t, err)
+
+	target := filepath.Join(tempDir, "targetfile")
+	err = ioutil.WriteFile(target, []byte("Test\n"), 0655)
+	assert.NoError(t, err)
+
+	sha1 := "345e6aef713208c8d50cdea23b85e6ad831f0449"
+	objectsDir := filepath.Join(gr.worktree, gr.gitdir, "objects", sha1[:2])
+	fileName := filepath.Join(objectsDir, sha1[2:])
+	err = gr.cmdAdd(target)
+	assert.NoError(t, err)
+	assert.DirExists(t, objectsDir)
+	assert.FileExists(t, fileName)
+}
