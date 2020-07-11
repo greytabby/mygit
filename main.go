@@ -1,7 +1,7 @@
 package main
 
-import "github.com/greytabby/mygit/command"
+import "github.com/greytabby/mygit/cmd"
 
 func main() {
-	command.Execute()
+	cmd.Execute()
 }
