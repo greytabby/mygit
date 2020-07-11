@@ -1,15 +1,16 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
 )
 
 var rootCmd = &cobra.Command{
-	Use: "mygit",
+	Use:   "mygit",
 	Short: "mygit is reinventing the wheel",
-	Long: "mygit is git implementetion in golang."
+	Long:  "mygit is git implementetion in golang.",
 	Run: func(cmd *cobra.Command, args []string) {
 
 	},
@@ -20,9 +21,9 @@ func init() {
 }
 
 var versionCmd = &cobra.Command{
-	Use: "version",
+	Use:   "version",
 	Short: "Print the version number",
-	Long: "Print the version number",
+	Long:  "Print the version number",
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("mygit v0.0.1")
 	},

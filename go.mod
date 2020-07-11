@@ -1,4 +1,4 @@
-module mygit
+module github.com/greytabby/mygit
 
 go 1.13
 
