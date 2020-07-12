@@ -1,23 +1,25 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
 )
 
-var rootCmd = &cobra.Command{
-	Use:   "mygit",
-	Short: "mygit is reinventing the wheel",
-	Long:  "mygit is git implementetion in golang.",
-	Run: func(cmd *cobra.Command, args []string) {
+func NewMygitCommand() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "mygit",
+		Short: "mygit is reinventing the wheel",
+		Long:  "mygit is git implementetion in golang.",
+		Run: func(cmd *cobra.Command, args []string) {
 
-	},
-}
-
-func init() {
-	rootCmd.AddCommand(versionCmd)
+		},
+	}
+	cmd.AddCommand(versionCmd)
+	cmd.AddCommand(NewInitCommand())
+	return cmd
 }
 
 var versionCmd = &cobra.Command{
@@ -30,7 +32,13 @@ var versionCmd = &cobra.Command{
 }
 
 func Execute() {
-	if err := rootCmd.Execute(); err != nil {
+	mygit := NewMygitCommand()
+	dir, err := os.Getwd()
+	if err != nil {
+		errors.New("Cannot get current directory name")
+	}
+	mygit.PersistentFlags().StringP("git-dir", "d", dir, "git repo directory")
+	if err := mygit.Execute(); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
