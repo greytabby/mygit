@@ -3,11 +3,11 @@ package commands
 import (
 	"fmt"
 
-	"github.com/greytabby/mygit/domain/models"
+	"github.com/greytabby/mygit/domain/repository"
 )
 
 func GitInit(path string) {
-	repo, err := models.NewGitRepository(path, models.GitRepoConfigForceMakeRepo)
+	repo, err := repository.NewGitRepository(path, models.GitRepoConfigForceMakeRepo)
 	if err != nil {
 		fmt.Println(err)
 		return
