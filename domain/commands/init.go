@@ -7,7 +7,7 @@ import (
 )
 
 func GitInit(path string) {
-	repo, err := repository.NewGitRepository(path, models.GitRepoConfigForceMakeRepo)
+	repo, err := repository.NewGitRepository(path, repository.GitRepoConfigForceMakeRepo)
 	if err != nil {
 		fmt.Println(err)
 		return

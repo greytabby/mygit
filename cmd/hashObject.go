@@ -16,9 +16,8 @@ limitations under the License.
 package cmd
 
 import (
-	"github.com/spf13/cobra"
-
 	"github.com/greytabby/mygit/domain/commands"
+	"github.com/spf13/cobra"
 )
 
 func NewHashObjectCommand() *cobra.Command {
@@ -28,17 +27,25 @@ func NewHashObjectCommand() *cobra.Command {
 		Long:  `write git object. only blob now`,
 		Run:   cmdHashObject,
 	}
-	cmd.Flags().BoolP("w", "w", true, "write the object into the object database")
-	cmd.Flags().StringP("path", "p", nil, "process file as it were from this path")
+	cmd.Flags().StringP("type", "t", "blob", "object type. blob, tree, or commit")
 	return cmd
 }
 
 func cmdHashObject(cmd *cobra.Command, args []string) {
+	req := makeHashObjectReq(cmd, args)
+	commands.GitHashObject(cmd, req)
+}
+
+func makeHashObjectReq(cmd *cobra.Command, args []string) *commands.HashObjectRequest {
 	gitDir, _ := cmd.Flags().GetString("git-dir")
-	w := cmd.Flags().GetBool("w")
-	path := cmd.Flags().GetString("path")
+	objType, _ := cmd.Flags().GetString("type")
 	if gitDir == "" {
 		gitDir = "./"
 	}
-	commands.GitHashObject(gitDir, w, path)
+
+	return &commands.HashObjectRequest{
+		Worktree: gitDir,
+		ObjType:  objType,
+		Paths:    args,
+	}
 }

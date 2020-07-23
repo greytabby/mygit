@@ -5,9 +5,12 @@ import (
 	"compress/zlib"
 	"crypto/sha1"
 	"encoding/hex"
+	"errors"
+	"fmt"
 	"io/ioutil"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/greytabby/mygit/domain/repository"
 )
@@ -36,6 +39,25 @@ func Write(repo *repository.GitRepository, objType, data []byte) (string, error)
 		return "", err
 	}
 	return sha, nil
+}
+
+func Find(repo *repository.GitRepository, sha string) (string, error) {
+	if len(sha) < 2 {
+		return "", errors.New("hash prefix must be 2 or more charcters")
+	}
+	objDir := repo.RepositoryPath(filepath.Join("objects", sha[:2]))
+	rest := sha[2:]
+	objects, err := repo.ListGitDir(objDir)
+	if err != nil {
+		return "", nil
+	}
+	for _, obj := range objects {
+		if strings.HasPrefix(obj.Name(), rest) {
+			return filepath.Join(objDir, obj.Name()), nil
+		}
+	}
+	errorMsg := fmt.Sprintf("Object not found. %s\n", sha)
+	return "", errors.New(errorMsg)
 }
 
 func makeFullData(objType, data []byte) []byte {

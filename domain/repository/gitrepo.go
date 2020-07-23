@@ -80,6 +80,26 @@ func (r *GitRepository) SaveRepoDir(path string) error {
 	return os.MkdirAll(repoPath, 0755)
 }
 
+func (r *GitRepository) ListGitDir(path string) ([]os.FileInfo, error) {
+	dir := filepath.Join(r.gitDir, path)
+	return ioutil.ReadDir(dir)
+}
+
+func (r *GitRepository) ListWorkTreeDir(path string) ([]os.FileInfo, error) {
+	dir := filepath.Join(r.worktree, path)
+	return ioutil.ReadDir(dir)
+}
+
+func (r *GitRepository) ReadGitFile(path string) ([]byte, error) {
+	file := r.RepositoryPath(path)
+	return ioutil.ReadFile(file)
+}
+
+func (r *GitRepository) ReadWorkTreeFile(path string) ([]byte, error) {
+	file := filepath.Join(r.worktree, path)
+	return ioutil.ReadFile(file)
+}
+
 func dirExists(path string) bool {
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		return false
