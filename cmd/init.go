@@ -19,7 +19,7 @@ package cmd
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/greytabby/mygit/domain/commands"
+	"github.com/greytabby/mygit/git"
 )
 
 func NewInitCommand() *cobra.Command {
@@ -33,9 +33,15 @@ func NewInitCommand() *cobra.Command {
 }
 
 func cmdInit(cmd *cobra.Command, args []string) {
-	gitDir, _ := cmd.Flags().GetString("git-dir")
-	if gitDir == "" {
-		gitDir = "./"
+	worktree, _ := cmd.Flags().GetString("d")
+	if worktree == "" {
+		worktree = "./"
 	}
-	commands.GitInit(gitDir)
+
+	repo, err := git.CreateAndInitializeRepo(worktree)
+	if err != nil {
+		cmd.Println(err)
+		return
+	}
+	cmd.Printf("initialized empty repository: %s\n", repo.RepoPath("."))
 }
