@@ -20,6 +20,8 @@ func NewMygitCommand() *cobra.Command {
 	cmd.AddCommand(NewInitCommand())
 	cmd.AddCommand(NewCatFileCommand())
 	cmd.AddCommand(NewHashObjectCommand())
+	cmd.AddCommand(NewLsTreeCommand())
+	cmd.AddCommand(NewLsFilesCommand())
 	return cmd
 }
 

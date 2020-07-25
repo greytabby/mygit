@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"compress/zlib"
 	"crypto/sha1"
+	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -12,20 +14,6 @@ import (
 	"strconv"
 	"strings"
 )
-
-type IndexEntry struct {
-	ctime    int64
-	mtime    int64
-	dev      int32
-	inot     int32
-	mode     os.FileMode
-	uid      int
-	gid      int
-	fileSize int32
-	objectID []byte
-	flags    int16
-	filePath string
-}
 
 type GitRepository struct {
 	Worktree string
@@ -150,8 +138,10 @@ func repoDirPerm() os.FileMode {
 
 type (
 	GitCommit struct{}
-	GitTree   struct{}
-	GitBlob   struct {
+	GitTree   struct {
+		Entries []*GitTreeEntry
+	}
+	GitBlob struct {
 		Data []byte
 	}
 )
@@ -172,6 +162,29 @@ func (o *GitBlob) Deserialize(data []byte) {
 
 func (o *GitBlob) Type() []byte {
 	return []byte("blob")
+}
+
+func NewGitTree(data []byte) GitObject {
+	o := new(GitTree)
+	o.Deserialize(data)
+	return o
+}
+
+func (o *GitTree) Serialize() []byte {
+	result := make([][]byte, len(o.Entries))
+	for _, entry := range o.Entries {
+		e := bytes.Join([][]byte{[]byte(entry.Mode.String()), []byte(" "), []byte(entry.Path), []byte("\x00"), []byte(entry.Sha)}, []byte(""))
+		result = append(result, e)
+	}
+	return bytes.Join(result, []byte(""))
+}
+
+func (o *GitTree) Deserialize(data []byte) {
+	o.Entries = ParseTree(data)
+}
+
+func (o *GitTree) Type() []byte {
+	return []byte("tree")
 }
 
 // ReadObject retrun a GitObject whose exact type depends on the object.
@@ -201,6 +214,7 @@ func ReadObject(repo *GitRepository, sha string) (GitObject, error) {
 	switch objType {
 	case "commit":
 	case "tree":
+		fn = NewGitTree
 	case "blob":
 		fn = NewGitBlob
 	}
@@ -279,4 +293,119 @@ func decompressZlib(data []byte) ([]byte, error) {
 
 func byte2Int(b []byte) (int, error) {
 	return strconv.Atoi(string(b))
+}
+
+type GitTreeEntry struct {
+	Mode os.FileMode
+	Path string
+	Sha  string
+}
+
+func parseTreeOneEntry(data []byte) (int, *GitTreeEntry) {
+	// find a terminator of the mode
+	x := bytes.IndexByte(data, ' ')
+	mode := binary.BigEndian.Uint32(data[:x])
+
+	// find a null terminator of the path
+	y := bytes.IndexByte(data, '\x00')
+	path := data[x+1 : y]
+
+	sha := hex.EncodeToString(data[y+1 : y+21])
+
+	entry := &GitTreeEntry{
+		Mode: os.FileMode(mode),
+		Path: string(path),
+		Sha:  sha,
+	}
+	return y + 21, entry
+}
+
+func ParseTree(data []byte) []*GitTreeEntry {
+	x := 0
+	entries := make([]*GitTreeEntry, 0)
+	for x < len(data) {
+		y, entry := parseTreeOneEntry(data[x:])
+		entries = append(entries, entry)
+		x += y
+	}
+	return entries
+}
+
+type GitIndex struct {
+	Entries []*IndexEntry
+}
+
+type IndexEntry struct {
+	Ctime    uint64
+	Mtime    uint64
+	Dev      uint32
+	Ino      uint32
+	Mode     os.FileMode
+	Uid      uint32
+	Gid      uint32
+	FileSize uint32
+	ObjectID string
+	Flags    uint16
+	FilePath string
+}
+
+func ReadIndex(repo *GitRepository) (*GitIndex, error) {
+	data, err := ioutil.ReadFile(repo.RepoPath("index"))
+	if err != nil {
+		return nil, err
+	}
+	entryEndIndex := len(data) - 20
+	digest := hash(data[:entryEndIndex])
+	if digest != hex.EncodeToString(data[entryEndIndex:]) {
+		return nil, errors.New("Invalid index checksum")
+	}
+
+	sig := data[:4]
+	version := binary.BigEndian.Uint32(data[4:8])
+	entryNum := binary.BigEndian.Uint32(data[8:12])
+
+	if string(sig) != "DIRC" {
+		return nil, errors.New("Invalid index signature")
+	}
+	if version != 2 {
+		return nil, errors.New("unknown index version")
+	}
+	entryData := data[12:entryEndIndex]
+	entries := parseIndexEntry(entryData, int(entryNum))
+
+	return &GitIndex{Entries: entries}, nil
+}
+
+func parseIndexEntry(entryData []byte, entryNum int) []*IndexEntry {
+	var entries []*IndexEntry
+	i := 0
+	for j := 0; j < entryNum; j++ {
+		entry, read := parseIndexOneEntry(entryData[i:])
+		i += read
+		entries = append(entries, entry)
+	}
+	return entries
+}
+
+func parseIndexOneEntry(data []byte) (*IndexEntry, int) {
+	fieldsEnd := 62
+	fields := data[:fieldsEnd]
+	pathEnd := bytes.IndexByte(data[fieldsEnd:], '\x00')
+	entryEnd := fieldsEnd + pathEnd
+	path := data[fieldsEnd:entryEnd]
+	entry := new(IndexEntry)
+
+	entry.FilePath = string(path)
+	entry.Ctime = binary.BigEndian.Uint64(fields[:8])
+	entry.Mtime = binary.BigEndian.Uint64(fields[8:16])
+	entry.Dev = binary.BigEndian.Uint32(fields[16:20])
+	entry.Ino = binary.BigEndian.Uint32(fields[20:24])
+	entry.Mode = os.FileMode(binary.BigEndian.Uint32(fields[24:28]))
+	entry.Uid = binary.BigEndian.Uint32(fields[28:32])
+	entry.Gid = binary.BigEndian.Uint32(fields[32:36])
+	entry.FileSize = binary.BigEndian.Uint32(fields[36:40])
+	entry.ObjectID = hex.EncodeToString(fields[40:60])
+	entry.Flags = binary.BigEndian.Uint16(fields[60:62])
+
+	return entry, ((entryEnd + 8) / 8) * 8
 }
