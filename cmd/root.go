@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"errors"
 	"fmt"
 	"os"
 
@@ -19,6 +18,7 @@ func NewMygitCommand() *cobra.Command {
 	}
 	cmd.AddCommand(versionCmd)
 	cmd.AddCommand(NewInitCommand())
+	cmd.AddCommand(NewCatFileCommand())
 	return cmd
 }
 
@@ -35,9 +35,10 @@ func Execute() {
 	mygit := NewMygitCommand()
 	dir, err := os.Getwd()
 	if err != nil {
-		errors.New("Cannot get current directory name")
+		mygit.Println(err)
+		return
 	}
-	mygit.PersistentFlags().StringP("git-dir", "d", dir, "git repo directory")
+	mygit.PersistentFlags().StringP("d", "d", dir, "git repo directory")
 	if err := mygit.Execute(); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
