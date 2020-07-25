@@ -19,6 +19,7 @@ func NewMygitCommand() *cobra.Command {
 	cmd.AddCommand(versionCmd)
 	cmd.AddCommand(NewInitCommand())
 	cmd.AddCommand(NewCatFileCommand())
+	cmd.AddCommand(NewHashObjectCommand())
 	return cmd
 }
 

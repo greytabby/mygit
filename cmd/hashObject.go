@@ -16,6 +16,7 @@ limitations under the License.
 package cmd
 
 import (
+	"io/ioutil"
 	"path/filepath"
 
 	"github.com/greytabby/mygit/git"
@@ -23,18 +24,19 @@ import (
 )
 
 // catFileCmd represents the catFile command
-func NewCatFileCommand() *cobra.Command {
+func NewHashObjectCommand() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "cat-file -type [TYPE] [SHA1 HASH]",
-		Short: "mygit cat-file",
-		Long:  `read object file.`,
-		Run:   cmdCatFile,
+		Use:   "hash-object -t [TYPE] [PATH]",
+		Short: "write object file",
+		Long:  `write object file`,
+		Run:   cmdHashObject,
 	}
 	cmd.Flags().StringP("type", "t", "blob", "object type. commit, tree, or blob.")
+	cmd.Flags().BoolP("write", "w", true, "Actually write the object into the database.")
 	return cmd
 }
 
-func cmdCatFile(cmd *cobra.Command, args []string) {
+func cmdHashObject(cmd *cobra.Command, args []string) {
 	if len(args) < 1 {
 		cmd.Println(cmd.Usage())
 		return
@@ -57,12 +59,31 @@ func cmdCatFile(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	for _, sha := range args {
-		obj, err := git.FindObject(repo, sha, objType)
+	for _, fd := range args {
+		sha, err := writeObject(fd, objType, repo)
 		if err != nil {
 			cmd.Println(err)
 			continue
 		}
-		cmd.Println(string(obj.Serialize()))
+		cmd.Println(fd, ":", sha)
 	}
+}
+
+func writeObject(path, objType string, repo *git.GitRepository) (string, error) {
+	data, err := ioutil.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+
+	var fn func([]byte) git.GitObject
+	switch objType {
+	case "commit":
+	case "tree":
+	case "blob":
+		fn = git.NewGitBlob
+	}
+
+	obj := fn(data)
+
+	return git.WriteObject(repo, obj)
 }

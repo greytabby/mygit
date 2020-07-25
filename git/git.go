@@ -121,20 +121,20 @@ func CreateAndInitializeRepo(path string) (*GitRepository, error) {
 // FindRepo return git repository path
 // if .git directory is not exist in path,
 // find parent directory recursively.
-func FindRepo(path string) string {
+func FindRepo(path string) (string, error) {
 	absPath, err := filepath.Abs(path)
 	if err != nil {
-		return ""
+		return "", err
 	}
 
 	repoDir := filepath.Join(absPath, ".git")
 	if _, err := os.Stat(repoDir); !os.IsNotExist(err) {
-		return repoDir
+		return repoDir, nil
 	}
 
 	parent := filepath.Join(absPath, "../")
 	if parent == absPath {
-		return ""
+		return "", fmt.Errorf("Git repository not found. %s\n", path)
 	}
 
 	return FindRepo(parent)

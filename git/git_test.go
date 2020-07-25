@@ -58,8 +58,12 @@ func TestFindRepo(t *testing.T) {
 	_, err := CreateAndInitializeRepo(worktree)
 	assert.NoError(t, err)
 
-	assert.Equal(t, gitDir, FindRepo(dirA))
-	assert.Equal(t, "", FindRepo(dirB))
+	found, err := FindRepo(dirA)
+	assert.NoError(t, err)
+	assert.Equal(t, gitDir, found)
+	notFound, err := FindRepo(dirB)
+	assert.Error(t, err)
+	assert.Equal(t, "", notFound)
 
 	os.RemoveAll(temp)
 }
@@ -95,6 +99,19 @@ func TestReadObject(t *testing.T) {
 	assert.NoError(t, err)
 
 	got, err := ReadObject(repo, sha)
+	assert.NoError(t, err)
+	assert.Equal(t, obj.Serialize(), got.Serialize())
+
+	os.RemoveAll(temp)
+}
+
+func TestFindObject(t *testing.T) {
+	temp := os.TempDir()
+	repo, _ := CreateAndInitializeRepo(temp)
+	obj := NewGitBlob([]byte("test\n"))
+	sha, _ := WriteObject(repo, obj)
+
+	got, err := FindObject(repo, sha[:3], "blob")
 	assert.NoError(t, err)
 	assert.Equal(t, obj.Serialize(), got.Serialize())
 
