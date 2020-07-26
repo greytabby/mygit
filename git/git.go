@@ -13,6 +13,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
+	"time"
 )
 
 type GitRepository struct {
@@ -349,6 +351,25 @@ type IndexEntry struct {
 	FilePath string
 }
 
+func NewIndexEntry(info os.FileInfo, path, sha string) *IndexEntry {
+	entry := new(IndexEntry)
+	stat := info.Sys().(*syscall.Stat_t)
+
+	entry.Ctime = uint64(time.Unix(stat.Ctimespec.Sec, stat.Ctimespec.Nsec).UnixNano())
+	entry.Mtime = uint64(time.Unix(stat.Mtimespec.Sec, stat.Mtimespec.Nsec).UnixNano())
+	entry.Dev = uint32(stat.Dev)
+	entry.Ino = uint32(stat.Ino)
+	entry.Mode = os.FileMode(stat.Mode)
+	entry.Uid = stat.Uid
+	entry.Gid = stat.Gid
+	entry.FileSize = uint32(stat.Size)
+	entry.ObjectID = sha
+	entry.Flags = uint16(len(path))
+	entry.FilePath = path
+
+	return entry
+}
+
 func ReadIndex(repo *GitRepository) (*GitIndex, error) {
 	data, err := ioutil.ReadFile(repo.RepoPath("index"))
 	if err != nil {
@@ -408,4 +429,53 @@ func parseIndexOneEntry(data []byte) (*IndexEntry, int) {
 	entry.Flags = binary.BigEndian.Uint16(fields[60:62])
 
 	return entry, ((entryEnd + 8) / 8) * 8
+}
+
+func WriteIndex(repo *GitRepository, index *GitIndex) error {
+	// make data of all entries
+	var packedEntries [][]byte
+	for _, e := range index.Entries {
+		b := new(bytes.Buffer)
+		path := []byte(e.FilePath)
+		objHash := make([]byte, 20)
+		_, err := hex.Decode(objHash, []byte(e.ObjectID))
+		if err != nil {
+			return err
+		}
+		// TODO: binary.Write() error handling
+		binary.Write(b, binary.BigEndian, e.Ctime)
+		binary.Write(b, binary.BigEndian, e.Mtime)
+		binary.Write(b, binary.BigEndian, e.Dev)
+		binary.Write(b, binary.BigEndian, e.Ino)
+		binary.Write(b, binary.BigEndian, uint32(e.Mode))
+		binary.Write(b, binary.BigEndian, e.Uid)
+		binary.Write(b, binary.BigEndian, e.Gid)
+		binary.Write(b, binary.BigEndian, e.FileSize)
+		binary.Write(b, binary.BigEndian, objHash)
+		binary.Write(b, binary.BigEndian, e.Flags)
+		binary.Write(b, binary.BigEndian, path)
+		length := ((62 + len(path) + 8) / 8) * 8
+		binary.Write(b, binary.BigEndian, bytes.Repeat([]byte("\x00"), length-62-len(path)))
+		packedEntries = append(packedEntries, b.Bytes())
+	}
+
+	// make header binary data
+	version, entryNum := make([]byte, 4), make([]byte, 4)
+	binary.BigEndian.PutUint32(version, 2)
+	binary.BigEndian.PutUint32(entryNum, uint32(len(index.Entries)))
+	header := bytes.Join([][]byte{[]byte("DIRC"), version, entryNum}, []byte(""))
+	data := bytes.Join(packedEntries, []byte(""))
+
+	// make all index data
+	all_data := bytes.Join([][]byte{header, data}, []byte(""))
+
+	// append checksum to index data
+	digest := make([]byte, 20)
+	_, err := hex.Decode(digest, []byte(hash(all_data)))
+	if err != nil {
+		return err
+	}
+	writeData := bytes.Join([][]byte{all_data, []byte(digest)}, []byte(""))
+
+	return repo.SaveRepoFile("index", writeData)
 }

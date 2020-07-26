@@ -117,3 +117,39 @@ func TestFindObject(t *testing.T) {
 
 	os.RemoveAll(temp)
 }
+
+func TestReadIndex(t *testing.T) {
+	temp := os.TempDir()
+	repo, _ := CreateAndInitializeRepo(temp)
+	indexData, err := ioutil.ReadFile("testdata/index")
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = repo.SaveRepoFile("index", indexData)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	index, err := ReadIndex(repo)
+	assert.NoError(t, err)
+	assert.Equal(t, 2, len(index.Entries))
+
+	os.RemoveAll(temp)
+}
+
+func TestWriteIndex(t *testing.T) {
+	temp := os.TempDir()
+	repo, _ := CreateAndInitializeRepo(temp)
+	indexData, _ := ioutil.ReadFile("testdata/index")
+	repo.SaveRepoFile("index", indexData)
+
+	index, _ := ReadIndex(repo)
+	t.Log(index.Entries[0].ObjectID)
+	os.Remove(repo.RepoPath("index"))
+
+	err := WriteIndex(repo, index)
+	assert.NoError(t, err)
+	got, _ := ioutil.ReadFile(repo.RepoPath("index"))
+	assert.NoError(t, err)
+	assert.Equal(t, indexData, got)
+}
