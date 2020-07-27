@@ -11,6 +11,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"syscall"
@@ -138,11 +139,25 @@ func repoDirPerm() os.FileMode {
 	return os.FileMode(0755)
 }
 
+type GitUser struct {
+	Name  string
+	Email string
+	Time  string
+}
+
 type (
-	GitCommit struct{}
-	GitTree   struct {
+	GitCommit struct {
+		Tree      string
+		Parent    string
+		Author    GitUser
+		Committer GitUser
+		Message   string
+	}
+
+	GitTree struct {
 		Entries []*GitTreeEntry
 	}
+
 	GitBlob struct {
 		Data []byte
 	}
@@ -172,6 +187,22 @@ func NewGitTree(data []byte) GitObject {
 	return o
 }
 
+func NewGitTreeFromIndex(index *GitIndex) GitObject {
+	// support only top level directory
+	o := new(GitTree)
+
+	for _, ie := range index.Entries {
+		te := &GitTreeEntry{
+			Path: ie.FilePath,
+			Mode: ie.Mode,
+			Sha:  ie.ObjectID,
+		}
+		o.Entries = append(o.Entries, te)
+	}
+
+	return o
+}
+
 func (o *GitTree) Serialize() []byte {
 	result := make([][]byte, len(o.Entries))
 	for _, entry := range o.Entries {
@@ -187,6 +218,49 @@ func (o *GitTree) Deserialize(data []byte) {
 
 func (o *GitTree) Type() []byte {
 	return []byte("tree")
+}
+
+func NewGitCommitFromObjData(data []byte) GitObject {
+	o := new(GitCommit)
+	o.Deserialize(data)
+	return o
+}
+
+func (o *GitCommit) Serialize() []byte {
+	var data [][]byte
+	data = append(data, []byte(fmt.Sprintf("tree %s\n", o.Tree)))
+	data = append(data, []byte(fmt.Sprintf("parent %s\n", o.Parent)))
+	data = append(data, []byte(fmt.Sprintf("author %s <%s> %s\n", o.Author.Name, o.Author.Email, o.Author.Time)))
+	data = append(data, []byte(fmt.Sprintf("commiter %s <%s> %s\n", o.Committer.Name, o.Committer.Email, o.Committer.Time)))
+	data = append(data, []byte("\n"))
+	data = append(data, []byte(o.Message))
+	return bytes.Join(data, []byte(""))
+}
+
+func (o *GitCommit) Deserialize(data []byte) {
+	re := regexp.MustCompile(`tree (.*)\nparent (.*)\nauthor (.*) <(.*)> (.*)\ncommitter (.*) <(.*)> (.*)\n\n(.*)`)
+	strData := strings.NewReplacer(
+		`\r\n`, `\n`,
+		`\r`, `\n`,
+	).Replace(string(data))
+
+	fields := re.FindAllStringSubmatch(strData, -1)
+	if fields == nil {
+		return
+	}
+	fmt.Println(len(fields))
+	for _, f := range fields {
+		fmt.Println(f)
+	}
+	/*
+		o.Tree = fields[1]
+		o.Parent = fields[3]
+	*/
+
+}
+
+func (o *GitCommit) Type() []byte {
+	return []byte("commit")
 }
 
 // ReadObject retrun a GitObject whose exact type depends on the object.
@@ -215,6 +289,7 @@ func ReadObject(repo *GitRepository, sha string) (GitObject, error) {
 	var fn func([]byte) GitObject
 	switch objType {
 	case "commit":
+		fn = NewGitCommitFromObjData
 	case "tree":
 		fn = NewGitTree
 	case "blob":
