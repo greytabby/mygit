@@ -238,25 +238,24 @@ func (o *GitCommit) Serialize() []byte {
 }
 
 func (o *GitCommit) Deserialize(data []byte) {
-	re := regexp.MustCompile(`tree (.*)\nparent (.*)\nauthor (.*) <(.*)> (.*)\ncommitter (.*) <(.*)> (.*)\n\n(.*)`)
+	re := regexp.MustCompile(`(?m)^tree (.+)\nparent (.+)\nauthor (.+) <(.+)> (.+)\ncommitter (.+) <(.+)> (.+)\n\n(.+)$`)
 	strData := strings.NewReplacer(
 		`\r\n`, `\n`,
 		`\r`, `\n`,
 	).Replace(string(data))
 
-	fields := re.FindAllStringSubmatch(strData, -1)
+	fields := re.FindAllStringSubmatch(strData, -1)[0]
 	if fields == nil {
 		return
 	}
-	fmt.Println(len(fields))
-	for _, f := range fields {
-		fmt.Println(f)
-	}
-	/*
-		o.Tree = fields[1]
-		o.Parent = fields[3]
-	*/
-
+	// for _, fie := range fields {
+	// 	fmt.Println(fie)
+	// }
+	o.Tree = fields[1]
+	o.Parent = fields[2]
+	o.Author = GitUser{Name: fields[3], Email: fields[4], Time: fields[5]}
+	o.Committer = GitUser{Name: fields[6], Email: fields[7], Time: fields[8]}
+	o.Message = fields[9]
 }
 
 func (o *GitCommit) Type() []byte {
